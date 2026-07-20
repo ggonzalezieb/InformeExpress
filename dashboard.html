@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comercial Express · Panel de Ventas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/3.7.1/js/msal-browser.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+/* =========================================================================
+   DESIGN SYSTEM — Comercial Express
+   Tokens tomados del kit de marca (paleta indigo/violeta + acento naranjo,
+   tipografía Space Grotesk / IBM Plex Sans, radios, sombras y grillas
+   densas de ancho fijo).
+   ========================================================================= */
+:root{
+  /* Brand primary (indigo / violet) */
+  --brand-900: oklch(20% 0.05 290);
+  --brand-800: oklch(24% 0.045 290);
+  --brand-700: oklch(30% 0.07 290);
+  --brand-600: oklch(34% 0.075 290);
+  --brand-500: oklch(38% 0.05 290);
+  --brand-400: oklch(55% 0.05 290);
+  --brand-300: oklch(62% 0.05 290);
+
+  /* Accent (orange) */
+  --accent-500: oklch(68% 0.16 45);
+  --accent-400: oklch(75% 0.13 45);
+
+  /* Surfaces */
+  --surface-page: oklch(97% 0.012 70);
+  --surface-card: #FFFFFF;
+  --surface-subtle: oklch(98% 0.008 70);
+  --surface-zebra: oklch(97% 0.012 70);
+
+  /* Borders */
+  --border-strong: oklch(89% 0.015 70);
+  --border-hair: oklch(91% 0.012 70);
+  --border-faint: oklch(93% 0.008 70);
+
+  /* Status */
+  --pos-bg: oklch(94% 0.045 155); --pos-fg: oklch(38% 0.12 155); --pos-ring: oklch(85% 0.06 155);
+  --neg-bg: oklch(94% 0.04 30);   --neg-fg: oklch(42% 0.15 25);  --neg-ring: oklch(85% 0.06 25);
+  --neutral-bg: oklch(94% 0.008 290); --neutral-fg: oklch(62% 0.05 290); --neutral-ring: oklch(88% 0.012 290);
+
+  --text-strong: var(--brand-900);
+  --text-body: var(--brand-800);
+  --text-muted: var(--brand-400);
+  --text-faint: var(--brand-300);
+  --text-on-brand: #FFFFFF;
+
+  --gradient-brand: linear-gradient(120deg, var(--brand-700), var(--brand-900));
+  --gradient-accent-bar: linear-gradient(90deg, var(--brand-700), var(--accent-500));
+  --gradient-pill-active: linear-gradient(135deg, var(--brand-600), oklch(24% 0.06 290));
+
+  /* Typography */
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", Arial, system-ui, sans-serif;
+  --fs-h1: 27px; --fs-h2: 17px; --fs-card-title: 12px; --fs-body: 13px;
+  --fs-label: 12px; --fs-data: 11px; --fs-th: 9.5px; --fs-micro: 8.5px;
+  --ls-tight: -0.3px; --ls-title: 0.4px; --ls-caps: 0.6px;
+  --lh-tight: 1.15; --lh-snug: 1.25; --lh-body: 1.5;
+
+  /* Spacing / grid — column widths are FIXED and equal, text adapts to them */
+  --page-max: 1400px;
+  --col-name: 200px;
+  --col-metric: 96px;
+  --badge-w: 60px;
+
+  /* Effects */
+  --radius-panel: 20px; --radius-card: 16px; --radius-pill: 100px; --radius-sm: 4px;
+  --shadow-panel: 0 1px 3px oklch(24% 0.045 290 / 5%), 0 10px 28px oklch(24% 0.045 290 / 5%);
+  --shadow-card-hover: 0 16px 32px oklch(24% 0.045 290 / 14%);
+  --shadow-pill-active: 0 4px 14px oklch(30% 0.07 290 / 28%);
+  --shadow-rest: 0 1px 3px oklch(24% 0.045 290 / 6%);
+  --accent-edge: 4px solid var(--accent-500);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 0.12s; --dur-base: 0.16s; --dur-lift: 0.18s;
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  font-family:var(--font-body);
+  color:var(--text-body);
+  background:
+    radial-gradient(1200px 520px at 8% -10%, oklch(75% 0.13 45 / 10%), transparent 60%),
+    radial-gradient(1100px 520px at 100% 0%, oklch(30% 0.07 290 / 9%), transparent 55%),
+    var(--surface-page);
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit;}
+code{font-family:ui-monospace,Consolas,monospace;}
+
+/* ---------- Layout shell ---------- */
+.shell{display:grid;grid-template-columns:236px 1fr;min-height:100vh;}
+.sidebar{
+  background:var(--gradient-brand);
+  color:var(--text-on-brand);
+  padding:26px 16px;
+  position:sticky;top:0;height:100vh;
+  display:flex;flex-direction:column;
+}
+.brand{display:flex;flex-direction:column;align-items:flex-start;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:16px;}
+.brand img{height:30px;margin-bottom:10px;filter:brightness(0) invert(1);opacity:.95;}
+.brand small{
+  display:block;font-family:var(--font-body);font-size:10px;letter-spacing:1.2px;
+  text-transform:uppercase;color:oklch(80% 0.1 45);font-weight:600;
+}
+nav.tabs{display:flex;flex-direction:column;gap:4px;}
+.tab-btn{
+  all:unset;cursor:pointer;padding:10px 13px;border-radius:var(--radius-pill);
+  font-family:var(--font-display);font-size:12.5px;font-weight:600;letter-spacing:.2px;
+  color:oklch(85% 0.04 290);display:flex;align-items:center;justify-content:space-between;gap:8px;
+  transition:all var(--dur-base) var(--ease-standard);
+}
+.tab-btn:hover{background:rgba(255,255,255,.08);color:#fff;}
+.tab-btn.active{background:var(--gradient-pill-active);color:#fff;box-shadow:var(--shadow-pill-active);}
+.tab-btn .count{font-family:var(--font-body);font-size:10px;opacity:.75;font-weight:600;}
+.sidebar-footer{margin-top:auto;padding-top:16px;border-top:1px solid rgba(255,255,255,.12);font-size:10.5px;color:oklch(78% 0.04 290);line-height:1.7;}
+.sidebar-footer code{color:var(--accent-400);}
+
+main{padding:26px 30px 60px;max-width:none;}
+
+/* ---------- Top bar ---------- */
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:20px;}
+.topbar h1{font-family:var(--font-display);font-size:var(--fs-h1);font-weight:700;letter-spacing:var(--ls-tight);color:var(--text-strong);margin:0 0 4px;}
+.topbar .sub{font-size:var(--fs-body);color:var(--text-muted);font-weight:500;}
+
+.datapanel{background:var(--surface-card);border:1px solid var(--border-strong);border-radius:var(--radius-card);padding:14px 16px;min-width:360px;box-shadow:var(--shadow-rest);}
+.datapanel .row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.datapanel .row:last-child{margin-bottom:0;}
+.datapanel label{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600;width:140px;flex-shrink:0;}
+.filebtn{
+  font-family:var(--font-display);font-size:11.5px;font-weight:600;padding:7px 14px;
+  border-radius:var(--radius-pill);border:1px solid var(--border-strong);background:var(--surface-card);
+  cursor:pointer;color:var(--brand-600);transition:all var(--dur-base) var(--ease-standard);white-space:nowrap;
+}
+.filebtn:hover{border-color:var(--brand-500);box-shadow:var(--shadow-rest);}
+input[type=file]{display:none;}
+.datapanel input[type=text]{font-family:var(--font-body);}
+.datapanel .meta{font-size:10.5px;color:var(--text-muted);margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-faint);line-height:1.5;}
+
+/* ---------- KPI cards ---------- */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
+.kpi-card{
+  background:var(--surface-card);border:1px solid var(--border-strong);border-radius:var(--radius-card);
+  padding:14px 16px;box-shadow:var(--shadow-rest);transition:transform var(--dur-lift) var(--ease-standard), box-shadow var(--dur-lift) var(--ease-standard);
+}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-card-hover);}
+.kpi-card .label{font-family:var(--font-display);font-size:10px;text-transform:uppercase;letter-spacing:var(--ls-caps);color:var(--text-muted);font-weight:600;margin-bottom:6px;}
+.kpi-card .value{font-family:var(--font-display);font-size:23px;font-weight:700;line-height:1.1;color:var(--text-strong);font-variant-numeric:tabular-nums;}
+.bar-track{height:5px;border-radius:4px;background:var(--surface-zebra);margin-top:9px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:4px;transition:width .4s;}
+.kpi-foot{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:10px;color:var(--text-muted);}
+
+/* Status badge — fixed width pill */
+.pill{
+  display:inline-flex;align-items:center;justify-content:center;gap:3px;
+  min-width:var(--badge-w);font-size:10px;font-weight:700;padding:2px 9px;
+  border-radius:var(--radius-pill);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.pill.green{background:var(--pos-bg);color:var(--pos-fg);box-shadow:inset 0 0 0 1px var(--pos-ring);}
+.pill.amber{background:oklch(94% 0.06 75);color:oklch(42% 0.12 70);box-shadow:inset 0 0 0 1px oklch(85% 0.08 75);}
+.pill.red{background:var(--neg-bg);color:var(--neg-fg);box-shadow:inset 0 0 0 1px var(--neg-ring);}
+
+/* ---------- Panels (CollapsiblePanel-style) ---------- */
+.panel{
+  background:var(--surface-card);border:1px solid var(--border-strong);border-radius:var(--radius-panel);
+  padding:22px 24px;margin-bottom:20px;box-shadow:var(--shadow-panel);
+}
+.panel h2{
+  font-family:var(--font-display);font-size:var(--fs-h2);font-weight:700;letter-spacing:var(--ls-title);
+  text-transform:uppercase;color:var(--text-strong);margin:0 0 4px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.panel h2 .tag{font-family:var(--font-body);font-size:10.5px;text-transform:none;letter-spacing:0;color:var(--text-faint);font-weight:600;}
+.panel .accent-rule{height:3px;background:var(--gradient-accent-bar);border-radius:2px;margin:12px 0 16px;}
+
+/* Branch card — dark gradient header + orange accent edge (KpiCard component) */
+.branch-card{
+  background:var(--surface-card);border:1px solid var(--border-strong);border-radius:var(--radius-card);
+  overflow:hidden;transition:transform var(--dur-lift) var(--ease-standard), box-shadow var(--dur-lift) var(--ease-standard), border-color var(--dur-lift) var(--ease-standard);
+}
+.branch-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-card-hover);border-color:oklch(75% 0.08 290);}
+.branch-card .branch-head{
+  background:var(--gradient-brand);color:var(--text-on-brand);padding:10px 16px;
+  font-family:var(--font-display);font-size:var(--fs-card-title);font-weight:700;
+  text-transform:uppercase;letter-spacing:var(--ls-caps);border-left:var(--accent-edge);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.branch-card .branch-head .tag{font-family:var(--font-body);font-size:10px;font-weight:500;color:oklch(85% 0.04 290);text-transform:none;letter-spacing:0;}
+
+/* ---------- Dense metric tables — FIXED equal-width columns ---------- */
+table.grid-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+table.grid-table col.col-name{width:var(--col-name);}
+table.grid-table col.col-data{width:var(--col-metric);}
+table.grid-table thead th{
+  font-family:var(--font-display);font-weight:700;color:var(--text-on-brand);background:var(--brand-700);
+  padding:6px 6px;border:1px solid oklch(24% 0.06 290 / 25%);text-transform:uppercase;
+  line-height:var(--lh-tight);font-size:var(--fs-micro);text-align:center;vertical-align:bottom;
+  white-space:normal;word-break:break-word;letter-spacing:.2px;
+}
+table.grid-table thead th:first-child{text-align:left;font-size:var(--fs-th);}
+table.grid-table tbody td{
+  text-align:center;padding:6px 6px;border:1px solid var(--border-hair);
+  font-size:var(--fs-data);font-variant-numeric:tabular-nums;color:var(--text-muted);
+  line-height:var(--lh-tight);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+table.grid-table tbody td:first-child{
+  text-align:left;font-weight:600;color:var(--text-strong);background:var(--surface-zebra);
+  white-space:normal;word-break:break-word;
+}
+table.grid-table tbody tr:hover td{background:var(--surface-subtle);}
+table.grid-table tbody tr:hover td:first-child{background:var(--surface-subtle);}
+table.grid-table tbody tr.total-row td{
+  font-weight:700;border-top:2px solid var(--brand-700);background:var(--surface-zebra);color:var(--text-strong);
+}
+table.grid-table tbody tr.total-row td:first-child{background:var(--surface-zebra);}
+
+.store-grid{display:grid;grid-template-columns:1fr;gap:16px;}
+.chart-wrap{height:270px;}
+.empty{text-align:center;padding:32px 16px;color:var(--text-muted);font-size:var(--fs-body);}
+
+::-webkit-scrollbar{height:8px;width:8px;}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px;}
+
+@media(max-width:860px){
+  .shell{grid-template-columns:1fr;}
+  .sidebar{position:relative;height:auto;}
+  main{padding:20px;}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="assets/logo-comercial-express.png" alt="Comercial Express">
+      <small>Panel de ventas · fuente única</small>
+    </div>
+    <nav class="tabs" id="tabNav"></nav>
+    <div class="sidebar-footer">
+      Fuente única: archivo plano de Bsale (1 fila = 1 línea de venta).<br><br>
+      Indicadores y sucursales se definen en <code>indicadores.js</code> / <code>sucursales.js</code>.
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div>
+        <h1>Avance de Ventas</h1>
+        <div class="sub" id="subHeader">Cargando datos…</div>
+      </div>
+      <div class="datapanel">
+        <div class="row">
+          <label for="fileInput">Archivo Bsale (manual)</label>
+          <button class="filebtn" onclick="document.getElementById('fileInput').click()">Cargar archivo…</button>
+          <input type="file" id="fileInput" accept=".xlsx,.xls">
+        </div>
+        <div class="row" style="align-items:center;">
+          <label>Microsoft</label>
+          <button class="filebtn" id="spLoginBtn">Iniciar sesión con Microsoft</button>
+          <span id="spAccount" style="font-size:11px;color:var(--text-muted);"></span>
+        </div>
+        <div class="row" style="align-items:center;">
+          <label>SharePoint</label>
+          <button class="filebtn" id="spSyncBtn" disabled>Sincronizar todo</button>
+          <button class="filebtn" id="spDiagBtn" disabled style="opacity:.75;">Diagnosticar conexión</button>
+        </div>
+        <div class="meta" id="loadMeta">
+          Mostrando datos de referencia incluidos en el panel.
+        </div>
+        <div class="meta" id="spStatus" style="border-top:none;margin-top:6px;padding-top:0;"></div>
+      </div>
+    </div>
+
+    <div id="tabContent"></div>
+  </main>
+</div>
+
+<script src="transacciones.js"></script>
+<script src="sucursales.js"></script>
+<script src="indicadores.js"></script>
+<script src="reglas.js"></script>
+<script src="sharepoint.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
