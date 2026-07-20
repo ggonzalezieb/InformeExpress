@@ -61,11 +61,15 @@ function spConfigured() {
 
 // MSAL v3 exige llamar initialize() y esperarlo antes de usar cualquier
 // otra función — por eso esto es async y todo lo que lo usa hace await.
+// IMPORTANTE: siempre se espera la MISMA promesa de initialize(), incluso
+// si msalInstance ya existe — si dos llamadas ocurren casi al mismo tiempo
+// (ej. restaurar sesión al cargar + click en "Iniciar sesión"), la segunda
+// no puede saltarse la espera solo porque la instancia ya fue creada.
 let msalInitPromise = null;
+let msalReady = false;
 async function spInitMsal() {
-  if (msalInstance) return msalInstance;
   if (typeof msal === 'undefined') throw new Error('No cargó la librería MSAL (revisa el <script> en el HTML).');
-  if (!msalInitPromise) {
+  if (!msalInstance) {
     msalInstance = new msal.PublicClientApplication({
       auth: {
         clientId: GRAPH_CONFIG.clientId,
@@ -74,14 +78,19 @@ async function spInitMsal() {
       },
       cache: { cacheLocation: 'localStorage' },
     });
+  }
+  if (!msalInitPromise) {
     msalInitPromise = msalInstance.initialize();
   }
   await msalInitPromise;
+  msalReady = true;
   return msalInstance;
 }
 
+// Segura de llamar en cualquier momento, incluso antes de que MSAL termine
+// de inicializar (devuelve null en ese caso en vez de lanzar un error).
 function spCuentaActiva() {
-  if (!msalInstance) return null;
+  if (!msalReady || !msalInstance) return null;
   return msalInstance.getActiveAccount();
 }
 
