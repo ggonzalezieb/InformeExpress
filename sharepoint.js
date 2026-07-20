@@ -25,8 +25,8 @@
    ========================================================================= */
 
 const GRAPH_CONFIG = {
-  clientId: '',   // <-- Application (client) ID de la app registrada en Azure AD
-  tenantId: '',   // <-- Directory (tenant) ID
+  clientId: '9abfdc51-4b4c-40f8-86be-4ceb3bd1306f',   // Panel Ventas CEX (Azure AD)
+  tenantId: 'a2c91f5e-f3c4-4e1a-a85e-d114d2650b65',   // Comercial Express (tenant)
   siteHostname: 'clcomercialexpress.sharepoint.com',
   sitePath: '/sites/BIBLIOTECA_CEX',
   listas: {
