@@ -30,10 +30,10 @@ const GRAPH_CONFIG = {
   siteHostname: 'clcomercialexpress.sharepoint.com',
   sitePath: '/sites/BIBLIOTECA_CEX',
   listas: {
-    sucursales: 'Sucursales',
-    dotacion: 'Dotación Vigente',
-    indicadores: 'Indicadores',
-    metas: 'Metas y Cuotas',
+    sucursales: 'SucursalesExpress',
+    dotacion: 'NOMINA_DOTACION_EJECUTIVOS_EXPRESS',
+    indicadores: 'Indicadores',   // <-- ajustar cuando la tengas creada
+    metas: 'Metas y Cuotas',      // <-- ajustar cuando la tengas creada
   },
   // Ruta del archivo de ventas DENTRO de la biblioteca de documentos
   // (relativa a la raíz del sitio, sin barra inicial). Ejemplo:
@@ -43,10 +43,10 @@ const GRAPH_CONFIG = {
 };
 
 const MAPEO_CAMPOS = {
-  sucursales: { nombreBsale: 'Title', ciudad: 'Ciudad', tipo: 'Tipo', activa: 'Activa', orden: 'Orden' },
-  dotacion: { nombre: 'Title', sucursal: 'Sucursal', activo: 'Activo' },
-  indicadores: { key: 'Title', activo: 'Activo', label: 'Nombre', corto: 'Corto', orden: 'Orden' },
-  metas: { key: 'IndicadorKey', meta: 'MetaMensual', cuotaDia: 'CuotaDia' },
+  sucursales: { nombreBsale: 'NombreSucursal', ciudad: 'Cluster', tipo: 'NombreRed', activa: 'SucursalActiva', orden: 'OrdenPDV' },
+  dotacion: { nombre: 'NombreEjecutivo', sucursal: 'TiendaExpress', estatus: 'Estatus' },
+  indicadores: { key: 'Title', activo: 'Activo', label: 'NombreCompleto', corto: 'NombreCorto', orden: 'Orden' },
+  metas: { key: 'Title', meta: 'MetaMensual', cuotaDia: 'CuotaDia' },
 };
 
 let SP_STATUS = { sucursales: null, dotacion: null, indicadores: null, metas: null, archivo: null };
@@ -201,18 +201,40 @@ function leerCampo(item, mapeo, campo, fallback) {
   return v !== undefined && v !== null ? v : fallback;
 }
 
+// Bsale entrega los nombres de sucursal en "Formato Título" (Curicó Camilo
+// Henríquez). Si tu lista de SharePoint los tiene en MAYÚSCULAS, esto los
+// convierte para que calcen exacto — sin esto, la sucursal nunca se
+// reconoce aunque el nombre "sea el mismo".
+function tituloEs(str) {
+  if (!str) return str;
+  return String(str).trim().toLowerCase()
+    .replace(/(^|[\s.])([a-záéíóúñü])/g, (m, sep, c) => sep + c.toUpperCase());
+}
+
+// Columnas "Sí/No" guardadas como texto (SI/NO, Sí/No, TRUE/FALSE, 1/0)
+// en vez de una casilla nativa. Cualquier otro valor -> false.
+function esVerdadero(valor) {
+  if (valor === true) return true;
+  if (valor === false || valor === null || valor === undefined) return false;
+  const v = String(valor).trim().toUpperCase();
+  return v === 'SI' || v === 'SÍ' || v === 'TRUE' || v === '1' || v === 'YES';
+}
+
 async function spSincronizarSucursales() {
   const items = await graphFetchListItems(GRAPH_CONFIG.listas.sucursales);
   const m = MAPEO_CAMPOS.sucursales;
   const nuevas = items
-    .map(it => ({
-      nombreBsale: leerCampo(it, m, 'nombreBsale', ''),
-      nombreVisible: leerCampo(it, m, 'nombreBsale', ''),
-      ciudad: leerCampo(it, m, 'ciudad', 'Sin ciudad'),
-      tipo: leerCampo(it, m, 'tipo', ''),
-      activa: !!leerCampo(it, m, 'activa', true),
-      orden: Number(leerCampo(it, m, 'orden', 999)),
-    }))
+    .map(it => {
+      const nombre = tituloEs(leerCampo(it, m, 'nombreBsale', ''));
+      return {
+        nombreBsale: nombre,
+        nombreVisible: nombre,
+        ciudad: tituloEs(leerCampo(it, m, 'ciudad', 'Sin ciudad')),
+        tipo: leerCampo(it, m, 'tipo', ''),
+        activa: esVerdadero(leerCampo(it, m, 'activa', true)),
+        orden: Number(leerCampo(it, m, 'orden', 999)),
+      };
+    })
     .filter(s => s.nombreBsale)
     .sort((a, b) => a.orden - b.orden);
   if (nuevas.length) {
@@ -228,8 +250,12 @@ async function spSincronizarDotacion() {
   const m = MAPEO_CAMPOS.dotacion;
   DOTACION_VIGENTE.length = 0;
   items.forEach(it => {
-    if (!leerCampo(it, m, 'activo', true)) return;
-    DOTACION_VIGENTE.push({ nombre: leerCampo(it, m, 'nombre', ''), sucursal: leerCampo(it, m, 'sucursal', '') });
+    const estatus = String(leerCampo(it, m, 'estatus', '')).trim().toUpperCase();
+    if (estatus !== 'VIGENTE') return; // descarta LICENCIA, DESVINCULADO, etc.
+    DOTACION_VIGENTE.push({
+      nombre: leerCampo(it, m, 'nombre', ''),
+      sucursal: tituloEs(leerCampo(it, m, 'sucursal', '')),
+    });
   });
   SP_STATUS.dotacion = new Date();
   return DOTACION_VIGENTE.length;
@@ -243,7 +269,7 @@ async function spSincronizarIndicadores() {
     const key = leerCampo(it, m, 'key', null);
     const ind = key && INDICADORES.find(i => i.key === key);
     if (!ind) return;
-    ind.activo = !!leerCampo(it, m, 'activo', ind.activo);
+    ind.activo = esVerdadero(leerCampo(it, m, 'activo', ind.activo));
     ind.orden = Number(leerCampo(it, m, 'orden', ind.orden));
     const corto = leerCampo(it, m, 'corto', null);
     if (corto) ind.corto = corto;
