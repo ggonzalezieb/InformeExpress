@@ -59,6 +59,7 @@ function buildNav() {
     .concat(ciudades.map(c => ({ id: c.id, label: c.label, count: c.sucursales.length })))
     .concat([
       { id: 'metas', label: 'Metas y Cuotas', count: null },
+      { id: 'fuentes', label: 'Fuentes de Datos', count: null },
       { id: 'estructura', label: 'Estructura de Datos', count: null },
     ]);
   nav.innerHTML = items.map(it => `
@@ -359,6 +360,164 @@ function renderEstructura(container) {
     </div>`;
 }
 
+/* ---------------------------- FUENTES DE DATOS tab ---------------------------- */
+// Documentación "a mano" de dónde se usa cada campo mapeado en sharepoint.js
+// (MAPEO_CAMPOS). Si agregas un campo nuevo al mapeo, agrega también su
+// descripción acá para que la vista no lo muestre vacío.
+const USO_CAMPOS = {
+  sucursales: {
+    nombreBsale: 'Nombre exacto de la sucursal — es la llave que conecta con la columna "Sucursal" del archivo de ventas Bsale. Se usa en Resumen General, pestañas por ciudad y tablas de vendedores.',
+    ciudad: 'Agrupa las sucursales en la misma pestaña de ciudad (menú lateral).',
+    tipo: 'Solo informativo (Centro / Mall) — se muestra en la pestaña Estructura de Datos.',
+    activa: 'Si queda en falso, la sucursal deja de listarse en el Resumen y en su ciudad (el historial de ventas no se pierde).',
+    orden: 'Define el orden fijo en que aparece la sucursal en todas las tablas.',
+  },
+  dotacion: {
+    nombre: 'Nombre del vendedor — aparece en la tabla de vendedores dentro de la tarjeta de su sucursal.',
+    sucursal: 'Debe calzar exactamente con el nombreBsale del catálogo Sucursales para asignar al vendedor a su tienda.',
+    estatus: 'Filtro de importación: solo se cargan filas con valor "VIGENTE"; cualquier otro valor (LICENCIA, DESVINCULADO, etc.) se descarta.',
+  },
+  indicadores: {
+    key: 'Clave oficial del indicador (debe existir ya en indicadores.js) — sin match, la fila se ignora.',
+    activo: 'Activa o desactiva la columna del indicador en todo el panel.',
+    label: '⚠ Mapeado pero no se usa hoy al sincronizar — el nombre completo del indicador se define en indicadores.js.',
+    corto: 'Sobrescribe la etiqueta abreviada del encabezado de columna.',
+    orden: 'Sobrescribe la posición de la columna en las tablas.',
+  },
+  metas: {
+    key: 'Clave del indicador (debe calzar con la key en indicadores.js).',
+    meta: 'Meta mensual — alimenta el gráfico "Cumplimiento vs meta mensual" en Resumen General.',
+    cuotaDia: 'Cuota diaria — alimenta el % de avance mostrado en las tarjetas KPI del Resumen General.',
+  },
+};
+
+function fmtFechaLarga(d) {
+  if (!d) return null;
+  return d.toLocaleDateString('es-CL') + ' ' + d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) + ' hrs';
+}
+
+// Determina si lo que se está mostrando AHORA para el archivo de ventas
+// viene de la carga manual o de la sincronización SharePoint, comparando
+// cuál de las dos ocurrió más recientemente.
+function origenArchivoActual() {
+  if (SP_STATUS.archivo && fileLoadedAt) return SP_STATUS.archivo > fileLoadedAt ? 'sync' : 'manual';
+  if (SP_STATUS.archivo) return 'sync';
+  if (fileLoadedAt) return 'manual';
+  return 'base';
+}
+
+function pillOrigen(origen, fecha) {
+  const map = {
+    sync:   { cls: 'green', txt: 'Sincronizado desde SharePoint' },
+    manual: { cls: 'amber', txt: 'Carga manual' },
+    base:   { cls: '',      txt: 'Catálogo base (código)', style: 'background:var(--neutral-bg);color:var(--neutral-fg);box-shadow:inset 0 0 0 1px var(--neutral-ring);' },
+    vacio:  { cls: 'red',   txt: 'Sin datos cargados' },
+  };
+  const info = map[origen] || map.base;
+  const fechaTxt = fecha ? fmtFechaLarga(fecha) : '';
+  return `<span class="pill ${info.cls}" style="min-width:auto;padding:3px 12px;${info.style || ''}">${info.txt}</span>` +
+    (fechaTxt ? `<span style="font-size:11px;color:var(--text-muted);margin-left:8px;">${fechaTxt}</span>` : '');
+}
+
+function tablaMapeoCampos(mapeo, uso) {
+  const thStyle = 'text-align:left;padding:7px 9px;font-family:var(--font-display);font-size:10px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border-strong);';
+  const tdStyle = 'padding:6px 9px;border-bottom:1px solid var(--border-faint);font-size:12px;vertical-align:top;';
+  const rows = Object.entries(mapeo).map(([campo, columna]) => `
+    <tr>
+      <td style="${tdStyle}font-weight:600;color:var(--text-strong);white-space:nowrap;"><code>${campo}</code></td>
+      <td style="${tdStyle}white-space:nowrap;"><code>${columna}</code></td>
+      <td style="${tdStyle}color:var(--text-muted);">${(uso && uso[campo]) || '—'}</td>
+    </tr>`).join('');
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;">
+    <thead><tr><th style="${thStyle}">Campo interno</th><th style="${thStyle}">Columna en SharePoint</th><th style="${thStyle}">Dónde se usa en el panel</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function renderFuentes(container) {
+  const cuenta = spCuentaActiva();
+  const configurado = spConfigured();
+
+  let estadoConexion;
+  if (!configurado) {
+    estadoConexion = '<span class="pill red" style="min-width:auto;padding:3px 12px;">Sin configurar</span> Faltan <code>clientId</code> / <code>tenantId</code> en <code>GRAPH_CONFIG</code> (sharepoint.js).';
+  } else if (!cuenta) {
+    estadoConexion = '<span class="pill amber" style="min-width:auto;padding:3px 12px;">Sin sesión</span> Configurado, pero no hay sesión de Microsoft iniciada — toca "Iniciar sesión con Microsoft" arriba.';
+  } else {
+    estadoConexion = `<span class="pill green" style="min-width:auto;padding:3px 12px;">Conectado</span> Sesión activa: <b>${cuenta.username}</b>`;
+  }
+
+  const origenArch = origenArchivoActual();
+  const fechaArch = origenArch === 'sync' ? SP_STATUS.archivo : origenArch === 'manual' ? fileLoadedAt : null;
+
+  const fuentes = [
+    {
+      titulo: 'Sucursales', archivo: 'sucursales.js', listaSP: GRAPH_CONFIG.listas.sucursales,
+      origen: SP_STATUS.sucursales ? 'sync' : 'base', fecha: SP_STATUS.sucursales,
+      registros: `${SUCURSALES.length} sucursal(es) en catálogo`,
+      mapeo: MAPEO_CAMPOS.sucursales, uso: USO_CAMPOS.sucursales,
+    },
+    {
+      titulo: 'Dotación Vigente', archivo: 'sucursales.js (DOTACION_VIGENTE)', listaSP: GRAPH_CONFIG.listas.dotacion,
+      origen: SP_STATUS.dotacion ? 'sync' : (DOTACION_VIGENTE.length ? 'manual' : 'vacio'), fecha: SP_STATUS.dotacion,
+      registros: `${DOTACION_VIGENTE.length} vendedor(es) cargados`,
+      mapeo: MAPEO_CAMPOS.dotacion, uso: USO_CAMPOS.dotacion,
+    },
+    {
+      titulo: 'Indicadores', archivo: 'indicadores.js', listaSP: GRAPH_CONFIG.listas.indicadores,
+      origen: SP_STATUS.indicadores ? 'sync' : 'base', fecha: SP_STATUS.indicadores,
+      registros: `${INDICADORES.filter(m => m.activo).length} indicador(es) activo(s) de ${INDICADORES.length} definidos`,
+      mapeo: MAPEO_CAMPOS.indicadores, uso: USO_CAMPOS.indicadores,
+    },
+    {
+      titulo: 'Metas y Cuotas', archivo: 'localStorage (cex_metas_v1)', listaSP: GRAPH_CONFIG.listas.metas,
+      origen: SP_STATUS.metas ? 'sync' : (Object.keys(METAS).length ? 'manual' : 'vacio'), fecha: SP_STATUS.metas,
+      registros: `${Object.keys(METAS).length} meta(s) definida(s)`,
+      mapeo: MAPEO_CAMPOS.metas, uso: USO_CAMPOS.metas,
+    },
+  ];
+
+  const tarjetas = fuentes.map(f => `
+    <div class="panel">
+      <h2>${f.titulo} <span class="tag">lista SharePoint: ${f.listaSP || 'sin configurar'}</span></h2>
+      <div class="accent-rule"></div>
+      <div style="margin-bottom:6px;">${pillOrigen(f.origen, f.fecha)}</div>
+      <p style="font-size:12px;color:var(--text-muted);margin:4px 0 14px;">
+        ${f.registros} · catálogo base en <code>${f.archivo}</code>
+      </p>
+      ${tablaMapeoCampos(f.mapeo, f.uso)}
+    </div>`).join('');
+
+  const archivoPanel = `
+    <div class="panel">
+      <h2>Archivo de ventas (Bsale) <span class="tag">${GRAPH_CONFIG.archivoVentasPath || 'ruta no configurada'}</span></h2>
+      <div class="accent-rule"></div>
+      <div style="margin-bottom:6px;">${pillOrigen(origenArch, fechaArch)}</div>
+      <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">
+        ${fileName ? `Archivo actual: <b>${fileName}</b> · ` : ''}${ROWS.length} línea(s) de venta cargadas.
+        ${origenArch === 'base' ? ' Estos son los datos de referencia incluidos en <code>transacciones.js</code>; aún no se ha cargado ni sincronizado un archivo real.' : ''}
+      </p>
+    </div>`;
+
+  const resumenPanel = `
+    <div class="panel">
+      <h2>Conexión Microsoft / SharePoint</h2>
+      <div class="accent-rule"></div>
+      <p style="font-size:12.5px;margin:0 0 8px;">${estadoConexion}</p>
+      <p style="font-size:11.5px;color:var(--text-muted);margin:0;">
+        Sitio: <code>${GRAPH_CONFIG.siteHostname}${GRAPH_CONFIG.sitePath}</code>
+      </p>
+    </div>`;
+
+  container.innerHTML = `
+    <p style="font-size:12.5px;color:var(--text-muted);margin:-6px 0 16px;">
+      Esta vista muestra, para cada fuente de datos, si lo que ves ahora mismo viene de una <b>carga manual</b>,
+      de una <b>sincronización con SharePoint</b>, o son los datos de referencia del código — con qué lista y
+      columnas se conecta cada una, y para qué se usa cada campo dentro del panel.
+    </p>
+    ${resumenPanel}${archivoPanel}${tarjetas}`;
+}
+
 /* ---------------------------- dispatcher ---------------------------- */
 function render() {
   buildNav();
@@ -366,6 +525,7 @@ function render() {
   const container = document.getElementById('tabContent');
   if (activeTab === 'resumen') renderResumen(container);
   else if (activeTab === 'metas') renderMetas(container);
+  else if (activeTab === 'fuentes') renderFuentes(container);
   else if (activeTab === 'estructura') renderEstructura(container);
   else {
     const ciudad = ciudadesCatalogo().find(c => c.id === activeTab);
